@@ -4,19 +4,51 @@ exports.init = function (grunt) {
     var fs = require('fs'),
         url = require('url'),
         handlebars = require('handlebars'),
-        marked = require('marked'),
+        metaMarked = require('meta-marked'),
         path = require('path'),
-        $ = require('jquery');
+        $ = require('jquery'),
+        wrench = require('wrench');
 
-    // Set default options except highlight which has no default
-    marked.setOptions({
+    var renderer = new metaMarked.Renderer();
+
+    renderer.image = function(href, title, text) {
+        var imageUrl = url.parse( href );
+        if ( !imageUrl.hostname ) {
+            // TODO: wenn bild lokal, stelle domain + pfad voran. aber woher nehmen? muss irgendwie während compile eingreifen...
+            //href = url.resolve(  )
+        }
+        return metaMarked.Renderer.prototype.paragraph(href, title, text);
+    };
+    renderer.paragraph = function( text ) {
+        // If paragraph contains only image, render image without surrounding paragraph
+        if ( text.match( /^<img/ ) ) {
+            console.log(text);
+            return text;
+        }
+        return metaMarked.Renderer.prototype.paragraph( text );
+    }
+
+    metaMarked.setOptions({
         tables: true,
         breaks: false,
         pedantic: false,
-        sanitize: true,
+        sanitize: false,
         smartLists: true,
         smartypants: true,
+        renderer: renderer
     });
+
+    /*
+
+    renderer.paragraph = function( text ) {
+        // If paragraph contains only image, render image without surrounding paragraph
+        if ( /^!\[/.match(text) ) {
+            return text;
+        }
+        return metaMarked.renderer.paragraph( text );
+    }*/
+
+
 
     handlebars.registerHelper('equal', function(v1, v2, blocks) {
         if(v1 == v2) {
@@ -27,7 +59,7 @@ exports.init = function (grunt) {
     });
 
     var sortByDate = function( a, b ) {
-        return new Date( b.metadata.Date ) - new Date( a.metadata.Date );
+        return new Date( b.meta.Date ) - new Date( a.meta.Date );
     }
 
     var hasChildren = function( dir ) {
@@ -49,57 +81,13 @@ exports.init = function (grunt) {
         return stats.isDirectory();
     }
 
-
-
-var getNavigation = function( file ) {
-        /*var nav = config.navigation,
-                fileSplit = file.split( path.sep )[0],
-                id = path.basename( fileSplit, path.extname( fileSplit ) );
-
-        return nav.map( function( item ) {
-                if ( id === item.name ) {
-                        item.active = true;
-                } else {
-                        item.active = false;
-                }
-
-                // If URL is defined in config, take that one
-                if ( item.url ) {
-                        return item;
-                }
-
-                if ( item.name === '' ) {
-                        item.url = '/';
-                } else {
-                        item.url = path.join( '/', item.name );
-                }
-                return item;
-        });*/
-    return [{name: 'test', url: 'test'}];
-};
-
-
-
-/*var createHome = function( options) {
-        var tmpl = loadTemplate( 'index.html', options ),
-                articles = listArticles( 'articles', options ).map( loadMarkdown ),
-                projects = listArticles( 'projects', options ).map( loadMarkdown );
-
-        return tmpl({
-                //articles : articles.sort( sortByDate ),
-                //config : config,
-                articles: articles.sort( sortByDate ),
-                projects: projects,
-                navigation: getNavigation( '/' )
-        });
-}*/
-
     var exports = {};
 
     exports.registerPartials = function( options ) {
-        grunt.log.writeln( options.templates );
         var partials,
             templates = fs.readdirSync( path.resolve ( options.templates ) );
+
+        grunt.log.subhead( 'Registering partials' );
 
         partials = templates.filter( function( item ) {
             if ( item[0] === '_' ) {
@@ -110,10 +98,10 @@ var getNavigation = function( file ) {
             var name,
                 s;
 
-            grunt.log.writeln( 'Registering partial "' + name + '"' );
-
             name = path.basename( partial, '.html' );
             name = name.substr(1, name.length - 1);
+
+            grunt.log.ok( name );
 
             s = fs.readFileSync( path.resolve( options.templates, partial ), 'utf8' );
             handlebars.registerPartial( name, s );
@@ -122,118 +110,147 @@ var getNavigation = function( file ) {
 
     exports.deploy = function( files, options ) {
 
-        var createIndex = function( type ) {
-            grunt.log.writeln('Creating index for ' + type);
-            var result,
-                articles;
+        var pages = [];
 
-            articles = listArticles( type ).map( loadMarkdown );
+        var walkDirectory = function(filepath, obj) {
+            var dir = fs.readdirSync( path.resolve( options.content, filepath ) );
+            if ( dir.length > 0 ) {
+                obj.subpages = [];
+            }
+            obj.path = filepath + '/';
+            obj.url = url.resolve( options.domain, filepath );
+            obj.template = findTemplate( filepath );
+            for (var i = 0; i < dir.length; i++) {
+                var name = dir[i];
+                var target = path.join( filepath, name );
 
-            var tmpl = loadTemplate( path.join( type, 'index.html') );
+                var stats = fs.statSync( path.resolve( options.content, target ));
+                if (stats.isFile()) {
 
-            return tmpl({
-                    articles : articles.sort( sortByDate ),
-                    //config : config,
-                    navigation: getNavigation( type )
-            });
-        };
+                } else if (stats.isDirectory()) {
+                    var page = {
+                        slug: name
+                    };
+                    //obj.pages[i] = {};
+                    if ( fs.existsSync( path.join( options.content, target, 'index.md' ) ) ) {
+                        page.hasContent = true;
+                        page.markdown = path.join( target, 'index.md' );
+                        var html = loadMarkdown( page.markdown );
 
-        var listArticles = function( type ) {
-            var files = fs.readdirSync( path.resolve( options.content, type ) );
-
-            var dirs = files.filter(function( file ) {
-                return isDirectory( path.resolve( options.content, type, file) );
-            });
-
-            return dirs.map( function( item ) {
-                if ( fs.existsSync( path.resolve( options.content, type, item, item + '.md' ))) {
-                        return path.join( type, item, item + '.md' );
-                } else {
-                        return path.join( type, item, 'index.md' );
+                        page.meta = html.meta;
+                    }
+                    walkDirectory(target, page);
+                    obj.subpages.push( page );
                 }
+            }
+        };
+        // Creates an index of all the content
+        var collectPages = function() {
+            var pages = {};
+
+            grunt.log.subhead( 'Collecting content' );
+
+            walkDirectory( '', pages);
+            grunt.log.debug(JSON.stringify(pages, null, 4));
+
+            return pages;
+        }
+
+        var findTemplate = function( page ) {
+            var isSingle = fs.existsSync( path.join( options.content, page, 'index.md' ) );
+            //console.log(path.join( options.templates, page, 'index.md' ))
+
+            var templatePath = path.join( page, isSingle ? '../single.html' : 'index.html')
+
+            return templatePath;
+        }
+
+        var getNavigation = function( file ) {
+            var nav = options.navigation,
+                fileSplit = file.split( path.sep )[0],
+                id = path.basename( fileSplit, path.extname( fileSplit ) );
+
+            return nav.map( function( item ) {
+                item.active = id === item.name;
+
+                // If URL is defined in config, take that one
+                if ( item.url ) {
+                    return item;
+                }
+
+                if ( item.name === '' ) {
+                    item.url = '/';
+                } else {
+                    item.url = path.join( '/', item.name );
+                }
+                return item;
             });
         };
 
         var compile = function( templatePath, markdownPath ) {
             var tmpl,
-                html;
+                html = {};
 
             tmpl = loadTemplate( templatePath );
-            html = loadMarkdown( markdownPath );
+            if ( markdownPath ) {
+                html = loadMarkdown( markdownPath );
+            }
+            //html.url = path.join( '/', path.dirname( markdownPath ), '/' );
+            //html.navigation = getNavigation( markdownPath );
+            html.pages = pages;
 
-            return tmpl({
-                    content: html.html,
-                    meta: html.metadata,
-                    //config: config,
-                    navigation: getNavigation( markdownPath )
-            });
+            return tmpl( html );
         };
 
         var loadMarkdown = function( markdownFile ) {
-            var markdown = fs.readFileSync( path.resolve( options.content + markdownFile ), 'utf8' );
-            var html = {};
+            var markdown = fs.readFileSync( path.resolve( options.content, markdownFile ), 'utf8' );
+            var html = metaMarked( markdown, {renderer: renderer} );
 
-            html.html = marked( markdown );
+            // The EXCERPT is the first paragraph
             html.excerpt = $('<div>').html(html.html).find('p').first().html();
-            html.url = path.join( '/', path.dirname( markdownFile ), '/' );
 
             return html;
         }
 
         var loadTemplate = function( templateFile ) {
-            var tmpl = fs.readFileSync( path.resolve( options.templates + templateFile ), 'utf8');
+            var tmpl = fs.readFileSync( path.resolve( options.templates, templateFile ), 'utf8');
 
             return handlebars.compile( tmpl );
         };
 
-        var deployFile = function( file, i ) {
-            var input,
-                output,
-                stats;
+        var deployPage = function( page ) {
+            grunt.log.ok( page.path );
 
-            input  = path.resolve( options.content, file );
-            stats = fs.statSync( input );
+            var output = path.join( options.www, page.path, 'index.html' );
+            // Create directory, if not exists
+            wrench.mkdirSyncRecursive( path.join( options.www, page.path ) );
+            fs.writeFileSync( output, compile( page.template, page.hasContent ? page.markdown : undefined ) );
 
-            if ( stats.isDirectory() ) {
-                // Create directory
-                output = path.resolve( options.www, file );
-                if ( fs.existsSync( output ) ) {
-                        grunt.log.writeln( 'Directory exists: ' + output );
-                } else {
-                        grunt.log.writeln( 'Creating directory: ' + output );
-                        fs.mkdir( output );
+            // Copy assets
+
+            var dir = fs.readdirSync( path.resolve(path.join( options.content, page.path )) );
+            for (var i = 0; i < dir.length; i++) {
+                var name = dir[i];
+                var source = path.join( options.content, page.path, name );
+                var target = path.join( options.www, page.path, name );
+                //console.log(target);
+                var stats = fs.statSync( path.resolve( source ));
+                if (stats.isFile() && name !== 'index.md') {
+                    //cp
+                    var output = path.resolve( target );
+                    fs.writeFileSync( output, fs.readFileSync( path.resolve( source ) ) );
                 }
-                /*if ( hasChildren( input ) && file.split( path.sep ).length > 0 ) {
-                        // Create Index
-                        var type = path.dirname( file + '/' );
-                        type = file;
-                        fs.writeFileSync( path.join( output, 'index.html' ), createIndex( type ) );
-                }*/
-            /*} else if ( file === config.index ) {
-                // Create home page
-                output = path.resolve( options.www, 'index.html' );
-                fs.writeFileSync( output, createHome() );*/
-            } else if ( path.extname( file ) === '.md' && file.split( path.sep ).length > 1 ) {
-                // Compile content page
-                var templatePath,
-                        type = path.dirname( file );
-                templatePath = path.join( type, '..', 'single.html' );
-                if ( !fs.existsSync( path.resolve( options.templates, templatePath ) ) ) {
-                        templatePath = 'static.html';
-                }
-                output = path.resolve( options.www, path.dirname( file ), 'index.html' );
-                grunt.log.writeln( 'CC '  + file /*+ ' -> ' + output + ' using ' + templatePath*/ );
-                fs.writeFileSync( output, compile( templatePath, file ) );
-            } else {
-                // Copy any other file
-                output = path.resolve( options.www, file );
-                grunt.log.writeln( 'CP ' + file /*+ ' -> ' + output */);
-                fs.writeFileSync( output, fs.readFileSync( input ) );
             }
+
+            // Deploy sub-pages
+            page.subpages.forEach( deployPage );
         };
 
-        files.forEach( deployFile );
-    }
+        pages = collectPages();
+
+        grunt.log.subhead( 'Compiling templates & copying assets' );
+        deployPage( pages );
+    };
 
     return exports;
 };

@@ -31,19 +31,29 @@ module.exports = function(grunt) {
     // Configuration to be run (and then tested).
     bear: {
       options: {
+        domain: "//www.test.de",
+        basePath: "/",
         templates: "test/templates/",
         content: "test/content/",
         www: "test/www/",
         navigation: [
           {
-            title: "Blog",
-            url: "/"
+            title: "Startseite",
+            url: " "
           },
           {
             title: "About",
-            url: "/about/"
+            url: "about"
+          },
+          {
+            title: "Blog",
+            url: "articles"
           }
-        ]
+        ],
+        mapping: {
+          "articles/*": "articles/single.html",
+          "": "index.html"
+        }
       }
     },
 

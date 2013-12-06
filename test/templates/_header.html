@@ -1,0 +1,8 @@
+<nav>
+    <ul>
+        {{#each pages.subpages}}
+        {{#each subpages}}<li>
+            <a href="{{url}}" class="{{#if active}}active{{/if}}">{{meta.Title}}</a>
+        </li>{{/each}}{{/each}}
+    </ul>
+</nav>

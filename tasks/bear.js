@@ -25,11 +25,14 @@ module.exports = function(grunt) {
             separator: ', '
         });
 
+        grunt.log.debug( "Content path: " + options.content );
+        grunt.log.debug( "Template path: " + options.templates );
         bear.registerPartials( options );
 
         // Crawl through content, copy all images and style files and compile markdown files using the according templates
         var content = wrench.readdirSyncRecursive( path.resolve( options.content ) );
-        bear.deploy( content, options )
+
+        bear.deploy( content, options );
     });
 
 };

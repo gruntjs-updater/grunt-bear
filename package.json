@@ -1,7 +1,7 @@
 {
   "name": "grunt-bear",
   "description": "A static site generator for Grunt",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "homepage": "https://github.com/tvooo/grunt-bear",
   "author": {
     "name": "Tim von Oldenburg",
@@ -41,9 +41,9 @@
     "gruntplugin"
   ],
   "dependencies": {
-    "marked": "~0.2.10",
     "handlebars": "~1.1.2",
     "jquery": "~1.8.3",
-    "wrench": "~1.5.4"
+    "wrench": "~1.5.4",
+    "meta-marked": "~0.1.0"
   }
 }

@@ -37,6 +37,21 @@ grunt.initConfig({
 
 ### Options
 
+### Content to Template mapping
+
+* templates/
+    * articles/
+        * single.html
+        * index.html
+    * index.html
+* content/
+    * articles/
+        * article-1/
+            * article-1.md
+        * article-2/
+            * article-2.md
+    *
+
 #### options.separator
 Type: `String`
 Default value: `',  '`
