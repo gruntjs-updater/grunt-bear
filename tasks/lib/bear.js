@@ -7,7 +7,8 @@ exports.init = function (grunt) {
         metaMarked = require('meta-marked'),
         path = require('path'),
         $ = require('jquery'),
-        wrench = require('wrench');
+        wrench = require('wrench'),
+        moment = require('moment');
 
     var renderer = new metaMarked.Renderer();
 
@@ -17,7 +18,7 @@ exports.init = function (grunt) {
             // TODO: wenn bild lokal, stelle domain + pfad voran. aber woher nehmen? muss irgendwie während compile eingreifen...
             //href = url.resolve(  )
         }
-        return metaMarked.Renderer.prototype.paragraph(href, title, text);
+        return metaMarked.Renderer.prototype.image(href, title, text);
     };
     renderer.paragraph = function( text ) {
         // If paragraph contains only image, render image without surrounding paragraph
@@ -49,13 +50,26 @@ exports.init = function (grunt) {
     }*/
 
 
-
     handlebars.registerHelper('equal', function(v1, v2, blocks) {
         if(v1 == v2) {
             return blocks.fn(this);
         } else {
             return blocks.inverse(this);
         }
+    });
+
+    handlebars.registerHelper('sortByDate', function(context, options) {
+        var out, data;
+        if (options.data) {
+            data = handlebars.createFrame(options.data || {});
+            data.sorted = context.sort( sortByDate );
+        }
+        out = options.fn(context, { data: data });;
+        return out;
+    });
+
+    handlebars.registerHelper('date', function(dateString) {
+        return moment( dateString ).format("MMMM YYYY");
     });
 
     var sortByDate = function( a, b ) {
@@ -198,6 +212,8 @@ exports.init = function (grunt) {
             //html.url = path.join( '/', path.dirname( markdownPath ), '/' );
             //html.navigation = getNavigation( markdownPath );
             html.pages = pages;
+            html.permalink = url.resolve( options.domain, path.dirname( markdownPath ) );
+            //console.log( html.url);
 
             return tmpl( html );
         };
