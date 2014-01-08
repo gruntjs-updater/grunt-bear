@@ -3,9 +3,10 @@ exports.init = function (grunt) {
 
     var fs = require('fs'),
         url = require('url'),
-        handlebars = require('handlebars'),
+        path = require('path');
+
+    var handlebars = require('handlebars'),
         metaMarked = require('meta-marked'),
-        path = require('path'),
         $ = require('jquery'),
         wrench = require('wrench'),
         moment = require('moment');
@@ -20,14 +21,14 @@ exports.init = function (grunt) {
         }
         return metaMarked.Renderer.prototype.image(href, title, text);
     };
+
     renderer.paragraph = function( text ) {
         // If paragraph contains only image, render image without surrounding paragraph
         if ( text.match( /^<img/ ) ) {
-            console.log(text);
             return text;
         }
         return metaMarked.Renderer.prototype.paragraph( text );
-    }
+    };
 
     metaMarked.setOptions({
         tables: true,
@@ -38,17 +39,6 @@ exports.init = function (grunt) {
         smartypants: true,
         renderer: renderer
     });
-
-    /*
-
-    renderer.paragraph = function( text ) {
-        // If paragraph contains only image, render image without surrounding paragraph
-        if ( /^!\[/.match(text) ) {
-            return text;
-        }
-        return metaMarked.renderer.paragraph( text );
-    }*/
-
 
     handlebars.registerHelper('equal', function(v1, v2, blocks) {
         if(v1 == v2) {
@@ -179,28 +169,6 @@ exports.init = function (grunt) {
             return templatePath;
         }
 
-        var getNavigation = function( file ) {
-            var nav = options.navigation,
-                fileSplit = file.split( path.sep )[0],
-                id = path.basename( fileSplit, path.extname( fileSplit ) );
-
-            return nav.map( function( item ) {
-                item.active = id === item.name;
-
-                // If URL is defined in config, take that one
-                if ( item.url ) {
-                    return item;
-                }
-
-                if ( item.name === '' ) {
-                    item.url = '/';
-                } else {
-                    item.url = path.join( '/', item.name );
-                }
-                return item;
-            });
-        };
-
         var compile = function( templatePath, markdownPath ) {
             var tmpl,
                 html = {};
@@ -209,11 +177,8 @@ exports.init = function (grunt) {
             if ( markdownPath ) {
                 html = loadMarkdown( markdownPath );
             }
-            //html.url = path.join( '/', path.dirname( markdownPath ), '/' );
-            //html.navigation = getNavigation( markdownPath );
             html.pages = pages;
             html.permalink = url.resolve( options.domain, path.dirname( markdownPath ) );
-            //console.log( html.url);
 
             return tmpl( html );
         };
@@ -222,7 +187,7 @@ exports.init = function (grunt) {
             var markdown = fs.readFileSync( path.resolve( options.content, markdownFile ), 'utf8' );
             var html = metaMarked( markdown, {renderer: renderer} );
 
-            // The EXCERPT is the first paragraph
+            // The excerpt is the first paragraph
             html.excerpt = $('<div>').html(html.html).find('p').first().html();
 
             return html;
@@ -243,16 +208,13 @@ exports.init = function (grunt) {
             fs.writeFileSync( output, compile( page.template, page.hasContent ? page.markdown : undefined ) );
 
             // Copy assets
-
             var dir = fs.readdirSync( path.resolve(path.join( options.content, page.path )) );
             for (var i = 0; i < dir.length; i++) {
                 var name = dir[i];
                 var source = path.join( options.content, page.path, name );
                 var target = path.join( options.www, page.path, name );
-                //console.log(target);
                 var stats = fs.statSync( path.resolve( source ));
                 if (stats.isFile() && name !== 'index.md') {
-                    //cp
                     var output = path.resolve( target );
                     fs.writeFileSync( output, fs.readFileSync( path.resolve( source ) ) );
                 }
